@@ -1,0 +1,86 @@
+---
+title: "Homework 2"
+author: "Richard Zhao"
+output: html_document
+date: '2022-10-24'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+
+```{r packages}
+library(tidyverse)
+library(ggplot2)
+library(tidymodels)
+```   
+
+## Question 1:
+
+```{r}
+abalone <- read_csv("homework-2/data/abalone.csv")
+abalone
+abalone2 <- mutate(abalone, age = rings + 1.5)
+abalone2
+ggplot(abalone2, aes(x = age)) + geom_histogram(bins = 60) + theme_bw()
+```
+
+Age looks slightly skewed right, with a peak at 10.5 years. Most abalones in the data set are younger than 20 years of age.
+
+## Question 2:
+
+```{r}
+set.seed(1208)
+abalone2_split <- initial_split(abalone2, prop = 0.70, strata = age)
+abalone2_train <- training(abalone2_split)
+abalone2_test <- testing(abalone2_split)
+```
+
+## Question 3:
+
+```{r}
+abalone2_recipe <- recipe(age ~ ., data = abalone2_train) %>%
+  step_rm(rings) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_interact(terms = ~ starts_with("type"):shucked_weight + longest_shell:diameter + shucked_weight:shell_weight) %>%
+  step_center(all_predictors()) %>%
+  step_scale(all_predictors())
+```
+
+We shouldn't use rings to predict age because we used the rings variable to create the age variable by adding 1.5 years to the number of rings on an abalone. Including rings to predict age wouldn't give us any important information.
+
+## Question 4:
+
+```{r}
+lm_model <- linear_reg() %>%
+  set_engine("lm")
+```
+
+## Question 5:
+
+```{r}
+lm_wflow <- workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(abalone2_recipe)
+```
+
+## Question 6:
+
+```{r}
+lm_fit <- fit(lm_wflow, abalone2_train)
+abalone_example <- tibble(type = "F", longest_shell = 0.50, diameter = 0.10, height = 0.30, whole_weight = 4, shucked_weight = 1, viscera_weight = 2, shell_weight = 1, rings = 0)
+predict(lm_fit, new_data = abalone_example)
+```
+
+We predict the age of this hypothetical female abalone be 24.6 years.
+
+## Question 7:
+
+```{r}
+abalone2_metric <- metric_set(rmse, rsq, mae)
+abalone2_predict <- predict(lm_fit, abalone2_train) %>% bind_cols(abalone2_train %>% select(age))
+abalone2_metric(abalone2_predict, truth = age, estimate = .pred)
+```
+
+The R squared value is 0.5560139, which means that only 55.60139% of variation in abalone age is explained by our model. The relationship between the predictors and age isn't very linear, which might explain this R squared value.
